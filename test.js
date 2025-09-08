@@ -25,7 +25,7 @@ async function testBasicFunctionality() {
     const postResult = await nostr.posttoNostr("🧪 Test post from NostrSDK library #test", [["client", "nostr-sdk"]], null, 2); // POW difficulty 2 for faster testing
     console.log("✅ Posted note:", {
       success: postResult.success,
-      eventId: postResult.eventId.substring(0, 16) + "...",
+      eventId: postResult.eventId,
       published: postResult.published,
       failed: postResult.failed,
       powDifficulty: postResult.powDifficulty,
@@ -36,7 +36,7 @@ async function testBasicFunctionality() {
     const msgResult = await nostr.sendmessage(keyInfo.npub, "🧪 Test DM from NostrSDK library " + new Date().toISOString());
     console.log("✅ Sent message to self:", {
       success: msgResult.success,
-      eventId: msgResult.eventId.substring(0, 16) + "...",
+      eventId: msgResult.eventId,
       published: msgResult.published,
       failed: msgResult.failed,
     });
@@ -72,7 +72,7 @@ async function testBasicFunctionality() {
     });
     console.log("✅ Convenience function works:", {
       success: convResult.success,
-      eventId: convResult.eventId.substring(0, 16) + "...",
+      eventId: convResult.eventId,
       powDifficulty: convResult.powDifficulty,
     });
 
@@ -86,7 +86,7 @@ async function testBasicFunctionality() {
     );
     console.log("✅ Content tags extracted and posted:", {
       success: tagTestResult.success,
-      eventId: tagTestResult.eventId.substring(0, 16) + "...",
+      eventId: tagTestResult.eventId,
     });
 
     console.log("\n7. Cleanup...");
