@@ -1,0 +1,23 @@
+{
+  "name": "nostr-sdk",
+  "version": "0.0.1",
+  "description": "nostr sdk",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/besoeasy/nostr-sdk.git"
+  },
+  "keywords": [
+    "nostr",
+    "sdk"
+  ],
+  "author": "besoeasy",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/besoeasy/nostr-sdk/issues"
+  },
+  "homepage": "https://github.com/besoeasy/nostr-sdk#readme"
+}
