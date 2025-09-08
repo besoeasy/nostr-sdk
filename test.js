@@ -41,7 +41,7 @@ async function testBasicFunctionality() {
     // Test 4: Direct message (if recipient provided)
     if (TEST_RECIPIENT) {
       console.log('\n4. Testing direct message...');
-      const msgResult = await nostr.sendmessage(TEST_RECIPIENT, "🧪 Test DM from NostrSDK library");
+      const msgResult = await nostr.sendmessage(TEST_RECIPIENT, "🧪 Test DM from NostrSDK library " + new Date().toISOString());
       console.log('✅ Sent message:', {
         success: msgResult.success,
         eventId: msgResult.eventId.substring(0, 16) + '...',
