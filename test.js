@@ -1,16 +1,16 @@
-import KatalNostr, { posttoNostr, sendmessage, getmessage } from './index.js';
+import NostrSDK, { posttoNostr, sendmessage, getmessage } from './index.js';
 
-// Test configuration
-const TEST_NSEC = process.env.TEST_NSEC; // Set this to test with your key
-const TEST_RECIPIENT = process.env.TEST_RECIPIENT; // Set this to test messaging
+// Test configuration - you can set these manually for testing
+const TEST_NSEC = null; // Set this to test with your key (e.g., "nsec1...")
+const TEST_RECIPIENT = null; // Set this to test messaging (npub or hex pubkey)
 
 async function testBasicFunctionality() {
-  console.log('🧪 Testing Katal Nostr Library...\n');
+  console.log('🧪 Testing NostrSDK Library...\n');
 
   try {
     // Test 1: Class instantiation and key generation
     console.log('1. Testing key generation...');
-    const nostr = new KatalNostr();
+    const nostr = new NostrSDK();
     const keys = nostr.generateNewKey();
     console.log('✅ Generated keys:', {
       npub: keys.npub.substring(0, 20) + '...',
@@ -20,27 +20,28 @@ async function testBasicFunctionality() {
     // Test 2: Key import
     console.log('\n2. Testing key import...');
     if (TEST_NSEC) {
-      const nostr2 = new KatalNostr({ nsec: TEST_NSEC });
+      const nostr2 = new NostrSDK({ nsec: TEST_NSEC });
       const keyInfo = nostr2.getKeyInfo();
       console.log('✅ Imported key:', keyInfo.npub.substring(0, 20) + '...');
     } else {
-      console.log('⏭️  Skipping key import test (set TEST_NSEC environment variable)');
+      console.log('⏭️  Skipping key import test (set TEST_NSEC variable in test.js)');
     }
 
-    // Test 3: Public note posting
-    console.log('\n3. Testing public note posting...');
-    const postResult = await nostr.posttoNostr("🧪 Test post from Katal Nostr library", [['t', 'test']]);
+    // Test 3: Public note posting with POW
+    console.log('\n3. Testing public note posting with POW...');
+    const postResult = await nostr.posttoNostr("🧪 Test post from NostrSDK library #test", [['client', 'nostr-sdk']], null, 2); // POW difficulty 2 for faster testing
     console.log('✅ Posted note:', {
       success: postResult.success,
       eventId: postResult.eventId.substring(0, 16) + '...',
       published: postResult.published,
-      failed: postResult.failed
+      failed: postResult.failed,
+      powDifficulty: postResult.powDifficulty
     });
 
     // Test 4: Direct message (if recipient provided)
     if (TEST_RECIPIENT) {
       console.log('\n4. Testing direct message...');
-      const msgResult = await nostr.sendmessage(TEST_RECIPIENT, "🧪 Test DM from Katal Nostr library");
+      const msgResult = await nostr.sendmessage(TEST_RECIPIENT, "🧪 Test DM from NostrSDK library");
       console.log('✅ Sent message:', {
         success: msgResult.success,
         eventId: msgResult.eventId.substring(0, 16) + '...',
@@ -48,7 +49,7 @@ async function testBasicFunctionality() {
         failed: msgResult.failed
       });
     } else {
-      console.log('\n4. ⏭️  Skipping DM test (set TEST_RECIPIENT environment variable)');
+      console.log('\n4. ⏭️  Skipping DM test (set TEST_RECIPIENT variable in test.js)');
     }
 
     // Test 5: Message listening (brief test)
@@ -73,28 +74,47 @@ async function testBasicFunctionality() {
       console.log('✅ Message listening setup successful (no messages received in 3s)');
     }
 
-    // Test 6: Convenience functions
+    // Test 6: Convenience functions with POW
     console.log('\n6. Testing convenience functions...');
     try {
-      const convResult = await posttoNostr("🧪 Convenience function test");
+      const convResult = await posttoNostr("🧪 Convenience function test with @npub mentions and #hashtags", { 
+        tags: [['client', 'nostr-sdk']], 
+        powDifficulty: 1  // Lower POW for faster testing
+      });
       console.log('✅ Convenience function works:', {
         success: convResult.success,
-        eventId: convResult.eventId.substring(0, 16) + '...'
+        eventId: convResult.eventId.substring(0, 16) + '...',
+        powDifficulty: convResult.powDifficulty
       });
     } catch (error) {
       console.log('✅ Convenience function works (generated keys automatically)');
     }
 
-    console.log('\n7. Cleanup...');
+    // Test 7: Content tag extraction
+    console.log('\n7. Testing content tag extraction...');
+    const tagTestResult = await nostr.posttoNostr(
+      "Testing #nostr #bitcoin mentions @npub1xyz... and notes note1abc...", 
+      [], 
+      null, 
+      0  // No POW for this test
+    );
+    console.log('✅ Content tags extracted and posted:', {
+      success: tagTestResult.success,
+      eventId: tagTestResult.eventId.substring(0, 16) + '...'
+    });
+
+    console.log('\n8. Cleanup...');
     nostr.destroy();
     console.log('✅ Cleanup completed');
 
     console.log('\n🎉 All tests completed successfully!');
     console.log('\nQuick usage:');
-    console.log('import KatalNostr from "katal-nostr";');
-    console.log('const nostr = new KatalNostr();');
+    console.log('import NostrSDK from "./index.js";');
+    console.log('const nostr = new NostrSDK();');
     console.log('const keys = nostr.generateNewKey();');
     console.log('await nostr.posttoNostr("Hello Nostr!");');
+    console.log('// Or with custom POW difficulty:');
+    console.log('await nostr.posttoNostr("Hello Nostr!", [], null, 4);');
 
   } catch (error) {
     console.error('❌ Test failed:', error.message);
