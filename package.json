@@ -19,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/besoeasy/nostr-sdk/issues"
   },
-  "homepage": "https://github.com/besoeasy/nostr-sdk#readme"
+  "homepage": "https://github.com/besoeasy/nostr-sdk#readme",
+  "dependencies": {
+    "nostr-tools": "^2.16.2"
+  }
 }
