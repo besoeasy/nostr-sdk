@@ -109,7 +109,7 @@ class NostrSDK {
     this.pool = new SimplePool();
     this.privateKey = null;
     this.publicKey = null;
-    this.processedEvents = new Map();
+    this.processedmsgs = [];
     this.maxStoredEvents = 1000;
     
     // Initialize keys if provided
@@ -304,13 +304,12 @@ class NostrSDK {
     }
 
     const {
-      since = Math.floor(Date.now() / 1000) - (2 * 60), // Last 2 minutes by default
-      relays = null,
-      skipOld = true
+      since = Math.floor(Date.now() / 1000) - (100), // Last 100 seconds by default
+      relays = null
     } = options;
 
     const targetRelays = relays || this.relays;
-    const eventWindowMs = 2 * 60 * 1000; // 2 minutes
+    const maxAgeMs = 100 * 1000; // 100 seconds in milliseconds
 
     const filter = { 
       kinds: [4], 
@@ -324,37 +323,21 @@ class NostrSDK {
           const sender = event.pubkey;
           const encrypted = event.content;
 
-          // Skip events older than event window if skipOld is true
-          if (skipOld) {
-            const ageMs = Date.now() - event.created_at * 1000;
-            if (ageMs > eventWindowMs) {
-              return;
-            }
-          }
-
-          // Skip already processed events
-          if (this.processedEvents.has(event.id)) {
+          // Skip messages older than 100 seconds
+          const ageMs = Date.now() - event.created_at * 1000;
+          if (ageMs > maxAgeMs) {
             return;
           }
 
-          // Mark event as processed and maintain cache size
-          this.processedEvents.set(event.id, event.created_at * 1000);
+          // Skip already processed events
+          if (this.processedmsgs.includes(event.id)) {
+            return;
+          }
 
-          if (this.processedEvents.size > this.maxStoredEvents) {
-            // Remove oldest entry
-            let oldestEventId = null;
-            let oldestTimestamp = Infinity;
-
-            for (const [eventId, timestamp] of this.processedEvents.entries()) {
-              if (timestamp < oldestTimestamp) {
-                oldestTimestamp = timestamp;
-                oldestEventId = eventId;
-              }
-            }
-
-            if (oldestEventId) {
-              this.processedEvents.delete(oldestEventId);
-            }
+          // Add to processed messages and maintain array size
+          this.processedmsgs.push(event.id);
+          if (this.processedmsgs.length > this.maxStoredEvents) {
+            this.processedmsgs.shift(); // Remove oldest entry
           }
 
           // Decrypt message
@@ -476,7 +459,7 @@ class NostrSDK {
     if (this.pool) {
       this.pool.destroy();
     }
-    this.processedEvents.clear();
+    this.processedmsgs = [];
   }
 }
 

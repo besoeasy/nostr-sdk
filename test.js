@@ -1,8 +1,8 @@
 import NostrSDK, { posttoNostr, sendmessage, getmessage } from './index.js';
 
 // Test configuration - you can set these manually for testing
-const TEST_NSEC = null; // Set this to test with your key (e.g., "nsec1...")
-const TEST_RECIPIENT = null; // Set this to test messaging (npub or hex pubkey)
+const TEST_NSEC = "nsec17hnwquxfz9wq5hf4g3h0az2fglxdp4nhx4vnsywxh04pu3s0l0ss43rw86"; // Set this to test with your key (e.g., "nsec1...")
+const TEST_RECIPIENT = "npub176qdmkxp8uww4wfwm56ftu8uuarmhqxzwrsgr7qvwsqma7mzmf7qu9ktln"; // Set this to test messaging (npub or hex pubkey)
 
 async function testBasicFunctionality() {
   console.log('🧪 Testing NostrSDK Library...\n');
@@ -108,14 +108,7 @@ async function testBasicFunctionality() {
     console.log('✅ Cleanup completed');
 
     console.log('\n🎉 All tests completed successfully!');
-    console.log('\nQuick usage:');
-    console.log('import NostrSDK from "./index.js";');
-    console.log('const nostr = new NostrSDK();');
-    console.log('const keys = nostr.generateNewKey();');
-    console.log('await nostr.posttoNostr("Hello Nostr!");');
-    console.log('// Or with custom POW difficulty:');
-    console.log('await nostr.posttoNostr("Hello Nostr!", [], null, 4);');
-
+  
   } catch (error) {
     console.error('❌ Test failed:', error.message);
     console.error(error.stack);
