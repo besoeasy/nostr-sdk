@@ -7,22 +7,13 @@ async function testBasicFunctionality() {
   console.log("🧪 Testing NostrSDK Library...\n");
 
   try {
-    // Test 1: Key import and setup
-    console.log("1. Testing key import...");
-    if (!TEST_NSEC) {
-      throw new Error("TEST_NSEC is required for testing. Please set it in test.js");
-    }
-
-    const nostr = new NostrSDK({ nsec: TEST_NSEC });
-    const keyInfo = nostr.getKeyInfo();
-    console.log("✅ Imported key:", {
-      npub: keyInfo.npub.substring(0, 20) + "...",
-      nsec: keyInfo.nsec.substring(0, 20) + "...",
+    // Test 1: Public note posting with POW
+    console.log("1. Testing public note posting with POW...");
+    const postResult = await posttoNostr("🧪 Test post from NostrSDK library #test", {
+      nsec: TEST_NSEC,
+      tags: [["client", "nostr-sdk"]],
+      powDifficulty: 2
     });
-
-    // Test 2: Public note posting with POW
-    console.log("\n2. Testing public note posting with POW...");
-    const postResult = await nostr.posttoNostr("🧪 Test post from NostrSDK library #test", [["client", "nostr-sdk"]], null, 2); // POW difficulty 2 for faster testing
     console.log("✅ Posted note:", {
       success: postResult.success,
       eventId: postResult.eventId,
@@ -31,9 +22,17 @@ async function testBasicFunctionality() {
       powDifficulty: postResult.powDifficulty,
     });
 
+    // Test 2: Get key info for self-messaging
+    const tempNostr = new NostrSDK({ nsec: TEST_NSEC });
+    const keyInfo = tempNostr.getKeyInfo();
+    const selfNpub = keyInfo.npub;
+    tempNostr.destroy();
+
     // Test 3: Direct message to self
-    console.log("\n3. Testing direct message to self...");
-    const msgResult = await nostr.sendmessage(keyInfo.npub, "🧪 Test DM from NostrSDK library " + new Date().toISOString());
+    console.log("\n2. Testing direct message to self...");
+    const msgResult = await sendmessage(selfNpub, "🧪 Test DM from NostrSDK library " + new Date().toISOString(), {
+      nsec: TEST_NSEC
+    });
     console.log("✅ Sent message to self:", {
       success: msgResult.success,
       eventId: msgResult.eventId,
@@ -41,16 +40,18 @@ async function testBasicFunctionality() {
       failed: msgResult.failed,
     });
 
-    // Test 4: Message listening (brief test)
-    console.log("\n4. Testing message listening...");
+    // Test 4: Message listening
+    console.log("\n3. Testing message listening...");
     let messageReceived = false;
-    const unsubscribe = nostr.getmessage((message) => {
+    const unsubscribe = getmessage((message) => {
       console.log("📨 Received test message:", {
         from: message.senderNpub.substring(0, 20) + "...",
         content: message.content.substring(0, 50) + (message.content.length > 50 ? "..." : ""),
         timestamp: new Date(message.timestamp * 1000).toISOString(),
       });
       messageReceived = true;
+    }, {
+      nsec: TEST_NSEC
     });
 
     // Wait briefly for any messages
@@ -63,35 +64,20 @@ async function testBasicFunctionality() {
       console.log("✅ Message listening setup successful (no messages received in 5s)");
     }
 
-    // Test 5: Convenience functions with POW
-    console.log("\n5. Testing convenience functions...");
-    const convResult = await posttoNostr("🧪 Convenience function test with @npub mentions and #hashtags", {
-      nsec: TEST_NSEC,
-      tags: [["client", "nostr-sdk"]],
-      powDifficulty: 1, // Lower POW for faster testing
-    });
-    console.log("✅ Convenience function works:", {
-      success: convResult.success,
-      eventId: convResult.eventId,
-      powDifficulty: convResult.powDifficulty,
-    });
-
-    // Test 6: Content tag extraction
-    console.log("\n6. Testing content tag extraction...");
-    const tagTestResult = await nostr.posttoNostr(
+    // Test 5: Content tag extraction
+    console.log("\n4. Testing content tag extraction...");
+    const tagTestResult = await posttoNostr(
       "Testing #nostr #bitcoin mentions @npub1xyz... and notes note1abc...",
-      [],
-      null,
-      0 // No POW for this test
+      {
+        nsec: TEST_NSEC,
+        tags: [],
+        powDifficulty: 0 // No POW for this test
+      }
     );
     console.log("✅ Content tags extracted and posted:", {
       success: tagTestResult.success,
       eventId: tagTestResult.eventId,
     });
-
-    console.log("\n7. Cleanup...");
-    nostr.destroy();
-    console.log("✅ Cleanup completed");
 
     console.log("\n🎉 All tests completed successfully!");
   } catch (error) {
