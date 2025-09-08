@@ -2,7 +2,6 @@
   "name": "nostr-sdk",
   "version": "0.0.1",
   "description": "nostr sdk",
-  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "node test.js"
