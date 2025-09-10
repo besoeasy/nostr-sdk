@@ -293,6 +293,146 @@ class NostrSDK {
   }
 
   /**
+   * Reply to a specific post by its event ID
+   * @param {string} eventId - The event ID to reply to (hex or note format)
+   * @param {string} message - The reply message
+   * @param {string} authorPubkey - The public key of the original post author (hex or npub format)
+   * @param {Array} tags - Optional additional tags
+   * @param {Array} relays - Optional relay list (uses default if not provided)
+   * @param {number} powDifficulty - POW difficulty level (default: 4)
+   * @returns {Promise<Object>} - Result object with success status and event ID
+   */
+  async replyToPost(eventId, message, authorPubkey, tags = [], relays = null, powDifficulty = 4) {
+    if (!this.privateKey) {
+      throw new Error("Private key not set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
+    }
+
+    // Convert note format to event ID if needed
+    let targetEventId = eventId;
+    if (eventId.startsWith('note')) {
+      try {
+        const decoded = nip19.decode(eventId);
+        if (decoded && decoded.type === "note") {
+          targetEventId = decoded.data;
+        }
+      } catch (e) {
+        throw new Error(`Invalid note format: ${e.message}`);
+      }
+    }
+
+    // Convert npub to pubkey if needed
+    let targetPubkey = authorPubkey;
+    if (authorPubkey.startsWith('npub')) {
+      try {
+        const decoded = nip19.decode(authorPubkey);
+        if (decoded && decoded.type === "npub") {
+          targetPubkey = decoded.data;
+        }
+      } catch (e) {
+        throw new Error(`Invalid npub format: ${e.message}`);
+      }
+    }
+
+    const targetRelays = relays || this.relays;
+    
+    // Extract content tags from the message
+    const contentTags = extractContentTags(message);
+    
+    // Convert extracted tags to nostr format
+    const autoTags = [];
+    
+    // Add hashtags as 't' tags
+    contentTags.hashtags.forEach(hashtag => {
+      autoTags.push(['t', hashtag]);
+    });
+    
+    // Add mentions as 'p' tags
+    contentTags.mentions.forEach(mention => {
+      try {
+        const decoded = nip19.decode(mention);
+        if (decoded.type === 'npub') {
+          autoTags.push(['p', decoded.data]);
+        }
+      } catch (e) {
+        // Skip invalid npubs
+      }
+    });
+    
+    // Add note references as 'e' tags
+    contentTags.notes.forEach(note => {
+      try {
+        const decoded = nip19.decode(note);
+        if (decoded.type === 'note') {
+          autoTags.push(['e', decoded.data]);
+        }
+      } catch (e) {
+        // Skip invalid notes
+      }
+    });
+
+    // Add reply tags according to NIP-10
+    const replyTags = [
+      ['e', targetEventId, '', 'reply'], // The event being replied to
+      ['p', targetPubkey] // The author of the original post
+    ];
+    
+    // Combine all tags
+    const allTags = [...tags, ...autoTags, ...replyTags];
+
+    try {
+      let unsignedEvent = {
+        kind: 1, // Text note
+        created_at: Math.floor(Date.now() / 1000),
+        tags: allTags,
+        content: message,
+        pubkey: this.publicKey
+      };
+
+      // Calculate POW if difficulty > 0
+      if (powDifficulty > 0) {
+        console.log(`Calculating POW with difficulty ${powDifficulty}...`);
+        const startTime = Date.now();
+        unsignedEvent = await calculatePow(unsignedEvent, powDifficulty);
+        const powTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log(`POW calculated in ${powTime} seconds`);
+      }
+
+      // Sign the event
+      const signedEvent = finalizeEvent(unsignedEvent, this.privateKey);
+
+      // Publish to relays
+      const publishPromises = this.pool.publish(targetRelays, signedEvent);
+      const results = await Promise.allSettled(publishPromises);
+
+      let successful = 0;
+      let failed = 0;
+      const errors = [];
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          successful++;
+        } else {
+          failed++;
+          errors.push(`${targetRelays[index]}: ${result.reason}`);
+        }
+      });
+
+      return {
+        success: successful > 0,
+        eventId: signedEvent.id,
+        published: successful,
+        failed: failed,
+        totalRelays: targetRelays.length,
+        powDifficulty: powDifficulty,
+        replyTo: targetEventId,
+        errors: errors
+      };
+    } catch (error) {
+      throw new Error(`Failed to reply to post: ${error.message}`);
+    }
+  }
+
+  /**
    * Listen for direct messages sent to this account
    * @param {Function} onMessage - Callback function for received messages
    * @param {Object} options - Options for message filtering
@@ -492,4 +632,13 @@ export async function sendmessage(recipientPubkey, message, options = {}) {
     console.log("Generated new keys:", keys);
   }
   return await client.sendmessage(recipientPubkey, message, options.relays);
+}
+
+export async function replyToPost(eventId, message, authorPubkey, options = {}) {
+  const client = new NostrSDK(options);
+  if (!client.privateKey) {
+    const keys = client.generateNewKey();
+    console.log("Generated new keys:", keys);
+  }
+  return await client.replyToPost(eventId, message, authorPubkey, options.tags, options.relays, options.powDifficulty);
 }

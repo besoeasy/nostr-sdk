@@ -39,3 +39,11 @@ const nostr = require("nostr-sdk");
   - `message`: The message to send.
   - `options`: `{ relays, privateKey/nsec }`
   - Returns: Result object with status and event ID.
+
+- **replyToPost(eventId, message, authorPubkey, options = {})**
+  - Reply to a specific post by its event ID.
+  - `eventId`: The event ID to reply to (hex or note format).
+  - `message`: The reply message.
+  - `authorPubkey`: The public key of the original post author (hex or npub format).
+  - `options`: `{ tags, relays, powDifficulty, privateKey/nsec }`
+  - Returns: Result object with status and event ID.
