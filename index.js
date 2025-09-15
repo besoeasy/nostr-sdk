@@ -1,12 +1,4 @@
-import { 
-  SimplePool, 
-  nip19, 
-  getPublicKey, 
-  finalizeEvent, 
-  nip04, 
-  generateSecretKey,
-  getEventHash 
-} from "nostr-tools";
+import { SimplePool, nip19, getPublicKey, finalizeEvent, nip04, generateSecretKey, getEventHash } from "nostr-tools";
 
 /**
  * Default Nostr relays for maximum reach
@@ -40,24 +32,21 @@ function extractContentTags(content) {
   const mentionPattern = /@(npub[a-zA-Z0-9]{59})/g;
   const notePattern = /(nostr:)?(note[a-zA-Z0-9]{59})/g;
 
-  const hashtags = [...(content.match(hashtagPattern) || [])].map((tag) =>
-    tag.slice(1).toLowerCase()
-  );
-  
+  const hashtags = [...(content.match(hashtagPattern) || [])].map((tag) => tag.slice(1).toLowerCase());
+
   const links = content.match(urlPattern) || [];
-  
+
   const mentions = [];
   const mentionMatches = content.match(mentionPattern) || [];
   for (const match of mentionMatches) {
-    const npub = match.replace('@', '');
-    if (npub.length === 63) { // Valid npub length
+    const npub = match.replace("@", "");
+    if (npub.length === 63) {
+      // Valid npub length
       mentions.push(npub);
     }
   }
 
-  const notes = [...(content.match(notePattern) || [])].map(note => 
-    note.replace('nostr:', '')
-  );
+  const notes = [...(content.match(notePattern) || [])].map((note) => note.replace("nostr:", ""));
 
   return { hashtags, links, mentions, notes };
 }
@@ -70,33 +59,33 @@ function extractContentTags(content) {
  */
 async function calculatePow(event, difficulty) {
   if (difficulty === 0) return event;
-  
+
   let nonce = 0;
   let hash;
   const startTime = Date.now();
   const targetPrefix = "0".repeat(difficulty);
-  
+
   // Create a copy to avoid mutating the original
   const workEvent = { ...event, tags: [...event.tags] };
-  
+
   do {
     // Yield control every 1000 iterations or after 10ms
     if (nonce % 1000 === 0 && Date.now() - startTime > 10) {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    
+
     // Remove existing nonce tags
     workEvent.tags = workEvent.tags.filter((tag) => tag[0] !== "nonce");
     workEvent.tags.push(["nonce", String(nonce), String(difficulty)]);
     hash = getEventHash(workEvent);
     nonce++;
-    
+
     // Safety check to prevent infinite loops
     if (nonce > 10000000) {
       throw new Error(`POW calculation exceeded maximum attempts for difficulty ${difficulty}`);
     }
   } while (!hash.startsWith(targetPrefix));
-  
+
   return workEvent;
 }
 
@@ -111,7 +100,7 @@ class NostrSDK {
     this.publicKey = null;
     this.processedmsgs = [];
     this.maxStoredEvents = 1000;
-    
+
     // Initialize keys if provided
     if (options.privateKey) {
       this.setPrivateKey(options.privateKey);
@@ -128,13 +117,13 @@ class NostrSDK {
     if (!/^[0-9a-fA-F]{64}$/.test(hexKey)) {
       throw new Error("Invalid private key format. Must be 64-character hex string.");
     }
-    
+
     // Convert hex string to Uint8Array
     const bytes = new Uint8Array(32);
     for (let i = 0; i < 32; i++) {
       bytes[i] = parseInt(hexKey.substr(i * 2, 2), 16);
     }
-    
+
     this.privateKey = bytes;
     this.publicKey = getPublicKey(this.privateKey);
   }
@@ -164,10 +153,12 @@ class NostrSDK {
     this.privateKey = generateSecretKey();
     this.publicKey = getPublicKey(this.privateKey);
     return {
-      privateKey: Array.from(this.privateKey).map(b => b.toString(16).padStart(2, "0")).join(""),
+      privateKey: Array.from(this.privateKey)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
       publicKey: this.publicKey,
       nsec: nip19.nsecEncode(this.privateKey),
-      npub: nip19.npubEncode(this.publicKey)
+      npub: nip19.npubEncode(this.publicKey),
     };
   }
 
@@ -178,12 +169,14 @@ class NostrSDK {
     if (!this.privateKey || !this.publicKey) {
       throw new Error("No keys set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
     }
-    
+
     return {
-      privateKey: Array.from(this.privateKey).map(b => b.toString(16).padStart(2, "0")).join(""),
+      privateKey: Array.from(this.privateKey)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
       publicKey: this.publicKey,
       nsec: nip19.nsecEncode(this.privateKey),
-      npub: nip19.npubEncode(this.publicKey)
+      npub: nip19.npubEncode(this.publicKey),
     };
   }
 
@@ -201,42 +194,42 @@ class NostrSDK {
     }
 
     const targetRelays = relays || this.relays;
-    
+
     // Extract content tags from the message
     const contentTags = extractContentTags(message);
-    
+
     // Convert extracted tags to nostr format
     const autoTags = [];
-    
+
     // Add hashtags as 't' tags
-    contentTags.hashtags.forEach(hashtag => {
-      autoTags.push(['t', hashtag]);
+    contentTags.hashtags.forEach((hashtag) => {
+      autoTags.push(["t", hashtag]);
     });
-    
+
     // Add mentions as 'p' tags
-    contentTags.mentions.forEach(mention => {
+    contentTags.mentions.forEach((mention) => {
       try {
         const decoded = nip19.decode(mention);
-        if (decoded.type === 'npub') {
-          autoTags.push(['p', decoded.data]);
+        if (decoded.type === "npub") {
+          autoTags.push(["p", decoded.data]);
         }
       } catch (e) {
         // Skip invalid npubs
       }
     });
-    
+
     // Add note references as 'e' tags
-    contentTags.notes.forEach(note => {
+    contentTags.notes.forEach((note) => {
       try {
         const decoded = nip19.decode(note);
-        if (decoded.type === 'note') {
-          autoTags.push(['e', decoded.data]);
+        if (decoded.type === "note") {
+          autoTags.push(["e", decoded.data]);
         }
       } catch (e) {
         // Skip invalid notes
       }
     });
-    
+
     // Combine manual tags with auto-extracted tags
     const allTags = [...tags, ...autoTags];
 
@@ -246,7 +239,7 @@ class NostrSDK {
         created_at: Math.floor(Date.now() / 1000),
         tags: allTags,
         content: message,
-        pubkey: this.publicKey
+        pubkey: this.publicKey,
       };
 
       // Calculate POW if difficulty > 0
@@ -285,7 +278,7 @@ class NostrSDK {
         failed: failed,
         totalRelays: targetRelays.length,
         powDifficulty: powDifficulty,
-        errors: errors
+        errors: errors,
       };
     } catch (error) {
       throw new Error(`Failed to post to Nostr: ${error.message}`);
@@ -309,7 +302,7 @@ class NostrSDK {
 
     // Convert note format to event ID if needed
     let targetEventId = eventId;
-    if (eventId.startsWith('note')) {
+    if (eventId.startsWith("note")) {
       try {
         const decoded = nip19.decode(eventId);
         if (decoded && decoded.type === "note") {
@@ -322,7 +315,7 @@ class NostrSDK {
 
     // Convert npub to pubkey if needed
     let targetPubkey = authorPubkey;
-    if (authorPubkey.startsWith('npub')) {
+    if (authorPubkey.startsWith("npub")) {
       try {
         const decoded = nip19.decode(authorPubkey);
         if (decoded && decoded.type === "npub") {
@@ -334,36 +327,36 @@ class NostrSDK {
     }
 
     const targetRelays = relays || this.relays;
-    
+
     // Extract content tags from the message
     const contentTags = extractContentTags(message);
-    
+
     // Convert extracted tags to nostr format
     const autoTags = [];
-    
+
     // Add hashtags as 't' tags
-    contentTags.hashtags.forEach(hashtag => {
-      autoTags.push(['t', hashtag]);
+    contentTags.hashtags.forEach((hashtag) => {
+      autoTags.push(["t", hashtag]);
     });
-    
+
     // Add mentions as 'p' tags
-    contentTags.mentions.forEach(mention => {
+    contentTags.mentions.forEach((mention) => {
       try {
         const decoded = nip19.decode(mention);
-        if (decoded.type === 'npub') {
-          autoTags.push(['p', decoded.data]);
+        if (decoded.type === "npub") {
+          autoTags.push(["p", decoded.data]);
         }
       } catch (e) {
         // Skip invalid npubs
       }
     });
-    
+
     // Add note references as 'e' tags
-    contentTags.notes.forEach(note => {
+    contentTags.notes.forEach((note) => {
       try {
         const decoded = nip19.decode(note);
-        if (decoded.type === 'note') {
-          autoTags.push(['e', decoded.data]);
+        if (decoded.type === "note") {
+          autoTags.push(["e", decoded.data]);
         }
       } catch (e) {
         // Skip invalid notes
@@ -372,10 +365,10 @@ class NostrSDK {
 
     // Add reply tags according to NIP-10
     const replyTags = [
-      ['e', targetEventId, '', 'reply'], // The event being replied to
-      ['p', targetPubkey] // The author of the original post
+      ["e", targetEventId, "", "reply"], // The event being replied to
+      ["p", targetPubkey], // The author of the original post
     ];
-    
+
     // Combine all tags
     const allTags = [...tags, ...autoTags, ...replyTags];
 
@@ -385,7 +378,7 @@ class NostrSDK {
         created_at: Math.floor(Date.now() / 1000),
         tags: allTags,
         content: message,
-        pubkey: this.publicKey
+        pubkey: this.publicKey,
       };
 
       // Calculate POW if difficulty > 0
@@ -425,7 +418,7 @@ class NostrSDK {
         totalRelays: targetRelays.length,
         powDifficulty: powDifficulty,
         replyTo: targetEventId,
-        errors: errors
+        errors: errors,
       };
     } catch (error) {
       throw new Error(`Failed to reply to post: ${error.message}`);
@@ -444,17 +437,17 @@ class NostrSDK {
     }
 
     const {
-      since = Math.floor(Date.now() / 1000) - (100), // Last 100 seconds by default
-      relays = null
+      since = Math.floor(Date.now() / 1000) - 100, // Last 100 seconds by default
+      relays = null,
     } = options;
 
     const targetRelays = relays || this.relays;
     const maxAgeMs = 100 * 1000; // 100 seconds in milliseconds
 
-    const filter = { 
-      kinds: [4], 
+    const filter = {
+      kinds: [4],
       "#p": [this.publicKey],
-      since: since
+      since: since,
     };
 
     const sub = this.pool.subscribe(targetRelays, filter, {
@@ -495,12 +488,11 @@ class NostrSDK {
             senderNpub: nip19.npubEncode(sender),
             content: decrypted.trim(),
             timestamp: event.created_at,
-            event: event
+            event: event,
           };
 
           // Call the callback
           await onMessage(messageData);
-
         } catch (error) {
           console.error("Error handling message event:", error);
         }
@@ -535,7 +527,7 @@ class NostrSDK {
 
     // Convert npub to pubkey if needed
     let targetPubkey = recipientPubkey;
-    if (recipientPubkey.startsWith('npub')) {
+    if (recipientPubkey.startsWith("npub")) {
       try {
         const decoded = nip19.decode(recipientPubkey);
         if (decoded && decoded.type === "npub") {
@@ -585,7 +577,7 @@ class NostrSDK {
         published: successful,
         failed: failed,
         totalRelays: targetRelays.length,
-        errors: errors
+        errors: errors,
       };
     } catch (error) {
       throw new Error(`Failed to send message: ${error.message}`);
@@ -603,9 +595,29 @@ class NostrSDK {
   }
 }
 
-// Export the class and convenience functions
-export default NostrSDK;
+// Key generation and conversion utilities
+export function generateRandomNsec() {
+  const privateKey = generateSecretKey();
+  return nip19.nsecEncode(privateKey);
+}
 
+export function nsecToPublic(nsec) {
+  try {
+    const decoded = nip19.decode(nsec);
+    if (decoded && decoded.type === "nsec") {
+      const privateKey = new Uint8Array(decoded.data);
+      const publicKey = getPublicKey(privateKey);
+      return {
+        publicKey: publicKey,
+        npub: nip19.npubEncode(publicKey),
+      };
+    } else {
+      throw new Error("Invalid nsec format");
+    }
+  } catch (e) {
+    throw new Error(`Failed to decode nsec: ${e.message}`);
+  }
+}
 
 // Convenience functions for quick usage
 export async function posttoNostr(message, options = {}) {

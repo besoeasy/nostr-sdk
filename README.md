@@ -47,3 +47,14 @@ const nostr = require("nostr-sdk");
   - `authorPubkey`: The public key of the original post author (hex or npub format).
   - `options`: `{ tags, relays, powDifficulty, privateKey/nsec }`
   - Returns: Result object with status and event ID.
+
+### Key Utilities
+
+- **generateRandomNsec()**
+  - Generate a random private key in nsec format.
+  - Returns: String (nsec1...)
+
+- **nsecToPublic(nsec)**
+  - Convert an nsec private key to public key formats.
+  - `nsec`: Private key in nsec1... format.
+  - Returns: Object with `{ publicKey, npub }`
