@@ -585,6 +585,83 @@ class NostrSDK {
   }
 
   /**
+   * Get global feed from Nostr relays
+   * @param {Object} options - Options for feed filtering
+   * @returns {Promise<Array>} - Array of events
+   */
+  async getGlobalFeed(options = {}) {
+    const {
+      limit = 50,
+      since = Math.floor(Date.now() / 1000) - (3600), // Last hour by default
+      until = null,
+      kinds = [1], // Text notes by default
+      authors = null,
+      relays = null
+    } = options;
+
+    const targetRelays = relays || this.relays;
+    const events = [];
+    const seenEventIds = new Set();
+
+    const filter = {
+      kinds: kinds,
+      limit: limit,
+      since: since
+    };
+
+    if (until) {
+      filter.until = until;
+    }
+
+    if (authors && authors.length > 0) {
+      filter.authors = authors;
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (sub && sub.close) {
+          sub.close();
+        }
+        resolve(events);
+      }, 5000); // 5 second timeout
+
+      const sub = this.pool.subscribe(targetRelays, filter, {
+        onevent: (event) => {
+          // Avoid duplicates
+          if (!seenEventIds.has(event.id)) {
+            seenEventIds.add(event.id);
+            
+            // Add decoded formats for convenience
+            const eventData = {
+              ...event,
+              authorNpub: nip19.npubEncode(event.pubkey),
+              noteId: nip19.noteEncode(event.id),
+              createdAtDate: new Date(event.created_at * 1000)
+            };
+            
+            events.push(eventData);
+          }
+        },
+        oneose: () => {
+          // End of stored events - sort by creation time (newest first) and close
+          events.sort((a, b) => b.created_at - a.created_at);
+          
+          clearTimeout(timeout);
+          if (sub && sub.close) {
+            sub.close();
+          }
+          resolve(events);
+        },
+        onclose: (reason) => {
+          clearTimeout(timeout);
+          console.warn("Global feed subscription closed:", reason);
+          resolve(events);
+        },
+      });
+    });
+  }
+
+  /**
    * Close all connections and cleanup
    */
   destroy() {
@@ -654,3 +731,9 @@ export async function replyToPost(eventId, message, authorPubkey, options = {}) 
   }
   return await client.replyToPost(eventId, message, authorPubkey, options.tags, options.relays, options.powDifficulty);
 }
+
+export async function getGlobalFeed(options = {}) {
+  const client = new NostrSDK(options);
+  return await client.getGlobalFeed(options);
+}
+

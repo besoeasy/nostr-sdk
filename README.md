@@ -12,7 +12,6 @@ npm install nostr-sdk
 
 ```js
 const nostr = require("nostr-sdk");
-// ... use nostr-sdk functions here
 ```
 
 ## API
@@ -34,6 +33,7 @@ const nostr = require("nostr-sdk");
   - Returns: Unsubscribe function.
 
 - **sendmessage(recipientPubkey, message, options = {})**
+
   - Send an encrypted direct message to a user.
   - `recipientPubkey`: Recipient's public key (hex or npub).
   - `message`: The message to send.
@@ -41,6 +41,7 @@ const nostr = require("nostr-sdk");
   - Returns: Result object with status and event ID.
 
 - **replyToPost(eventId, message, authorPubkey, options = {})**
+
   - Reply to a specific post by its event ID.
   - `eventId`: The event ID to reply to (hex or note format).
   - `message`: The reply message.
@@ -48,9 +49,15 @@ const nostr = require("nostr-sdk");
   - `options`: `{ tags, relays, powDifficulty, privateKey/nsec }`
   - Returns: Result object with status and event ID.
 
+- **getGlobalFeed(options = {})**
+  - Get recent posts from the global Nostr feed.
+  - `options`: `{ limit, since, until, kinds, authors, relays }`
+  - Returns: Promise resolving to array of events with additional fields (authorNpub, noteId, createdAtDate)
+
 ### Key Utilities
 
 - **generateRandomNsec()**
+
   - Generate a random private key in nsec format.
   - Returns: String (nsec1...)
 
