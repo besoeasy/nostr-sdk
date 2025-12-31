@@ -2,6 +2,8 @@ import {
   posttoNostr, 
   sendmessage, 
   getmessage, 
+  sendMessageNIP17,
+  getMessageNIP17,
   replyToPost, 
   getGlobalFeed,
   generateRandomNsec,
@@ -265,6 +267,53 @@ async function testErrorHandling() {
   }
 }
 
+async function testNIP17Messaging() {
+  console.log("\n🎁 Testing NIP-17 Gift-Wrapped Messages...");
+  
+  if (!TEST_NSEC) {
+    console.log("⚠️  Skipping NIP-17 tests - TEST_NSEC not configured");
+    return;
+  }
+
+  try {
+    // Test 1: Send NIP-17 message
+    const recipientKey = nsecToPublic(generateRandomNsec());
+    const result = await sendMessageNIP17(
+      recipientKey.npub,
+      "Test NIP-17 message with gift wrap",
+      { nsec: TEST_NSEC }
+    );
+    
+    logTest("Send NIP-17 gift-wrapped message", 
+      result.success && result.nip === 17,
+      `Event ID: ${result.eventId.substring(0, 16)}... (NIP-17)`
+    );
+
+    // Test 2: Listen for NIP-17 messages (non-blocking test)
+    let receivedNIP17 = false;
+    const unsubscribe = getMessageNIP17(
+      async (msg) => {
+        receivedNIP17 = true;
+        console.log(`   📨 Received NIP-17 from ${msg.senderNpub.substring(0, 12)}...`);
+      },
+      { nsec: TEST_NSEC }
+    );
+
+    logTest("Subscribe to NIP-17 messages", 
+      unsubscribe && typeof unsubscribe === 'function',
+      "Subscription established (kind 1059)"
+    );
+
+    // Clean up subscription after a brief delay
+    setTimeout(() => {
+      if (unsubscribe) unsubscribe();
+    }, 2000);
+
+  } catch (error) {
+    logTest("NIP-17 messaging tests", false, error.message);
+  }
+}
+
 async function runAllTests() {
   console.log("🧪 NostrSDK Comprehensive Test Suite\n");
   console.log("═".repeat(50));
@@ -274,6 +323,7 @@ async function runAllTests() {
   await testKeyUtilities();
   await testPostFunctions();
   await testMessagingFunctions();
+  await testNIP17Messaging();
   await testGlobalFeed();
   await testErrorHandling();
   

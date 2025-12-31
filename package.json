@@ -3,6 +3,7 @@
   "version": "0.0.4",
   "description": "nostr sdk",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "node test.js"
   },

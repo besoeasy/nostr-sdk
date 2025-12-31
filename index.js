@@ -1,4 +1,4 @@
-import { SimplePool, nip19, getPublicKey, finalizeEvent, nip04, generateSecretKey, getEventHash } from "nostr-tools";
+import { SimplePool, nip19, getPublicKey, finalizeEvent, nip04, nip44, nip17, generateSecretKey, getEventHash } from "nostr-tools";
 
 /**
  * Default Nostr relays for maximum reach
@@ -585,6 +585,162 @@ class NostrSDK {
   }
 
   /**
+   * Send an encrypted direct message using NIP-17 (gift wrap)
+   * NIP-17 provides better privacy with sealed sender and ephemeral keys
+   * @param {string} recipientPubkey - Public key of the recipient (hex format)
+   * @param {string} message - Message to send
+   * @param {Array} relays - Optional relay list (uses default if not provided)
+   * @returns {Promise<Object>} - Result object with success status
+   */
+  async sendMessageNIP17(recipientPubkey, message, relays = null) {
+    if (!this.privateKey) {
+      throw new Error("Private key not set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
+    }
+
+    // Convert npub to pubkey if needed
+    let targetPubkey = recipientPubkey;
+    if (recipientPubkey.startsWith("npub")) {
+      try {
+        const decoded = nip19.decode(recipientPubkey);
+        if (decoded && decoded.type === "npub") {
+          targetPubkey = decoded.data;
+        }
+      } catch (e) {
+        throw new Error(`Invalid npub format: ${e.message}`);
+      }
+    }
+
+    const targetRelays = relays || this.relays;
+
+    try {
+      // Create a recipient object for NIP-17
+      const recipient = {
+        publicKey: targetPubkey,
+      };
+
+      // Wrap the message using NIP-17 gift wrap
+      // This creates a kind 1059 event with sealed sender
+      const giftWrappedEvent = nip17.wrapEvent(this.privateKey, recipient, message);
+
+      // Publish to relays
+      const publishPromises = this.pool.publish(targetRelays, giftWrappedEvent);
+      const results = await Promise.allSettled(publishPromises);
+
+      let successful = 0;
+      let failed = 0;
+      const errors = [];
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          successful++;
+        } else {
+          failed++;
+          errors.push(`${targetRelays[index]}: ${result.reason}`);
+        }
+      });
+
+      return {
+        success: successful > 0,
+        eventId: giftWrappedEvent.id,
+        published: successful,
+        failed: failed,
+        totalRelays: targetRelays.length,
+        nip: 17,
+        errors: errors,
+      };
+    } catch (error) {
+      throw new Error(`Failed to send NIP-17 message: ${error.message}`);
+    }
+  }
+
+  /**
+   * Listen for NIP-17 gift-wrapped messages (kind 1059)
+   * @param {Function} onMessage - Callback function for received messages
+   * @param {Object} options - Options for message filtering
+   * @returns {Function} - Unsubscribe function
+   */
+  getMessageNIP17(onMessage, options = {}) {
+    if (!this.privateKey || !this.publicKey) {
+      throw new Error("Keys not set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
+    }
+
+    const {
+      since = Math.floor(Date.now() / 1000) - 100, // Last 100 seconds by default
+      relays = null,
+    } = options;
+
+    const targetRelays = relays || this.relays;
+    const maxAgeMs = 100 * 1000; // 100 seconds in milliseconds
+
+    const filter = {
+      kinds: [1059], // Gift wrap events
+      "#p": [this.publicKey],
+      since: since,
+    };
+
+    const sub = this.pool.subscribe(targetRelays, filter, {
+      onevent: async (event) => {
+        try {
+          // Skip messages older than 100 seconds
+          const ageMs = Date.now() - event.created_at * 1000;
+          if (ageMs > maxAgeMs) {
+            return;
+          }
+
+          // Skip already processed events
+          if (this.processedmsgs.includes(event.id)) {
+            return;
+          }
+
+          // Add to processed messages and maintain array size
+          this.processedmsgs.push(event.id);
+          if (this.processedmsgs.length > this.maxStoredEvents) {
+            this.processedmsgs.shift(); // Remove oldest entry
+          }
+
+          // Unwrap the gift-wrapped event
+          let unwrapped;
+          try {
+            unwrapped = nip17.unwrapEvent(event, this.privateKey);
+          } catch (e) {
+            console.warn(`Failed to unwrap NIP-17 message: ${e.message}`);
+            return;
+          }
+
+          const messageData = {
+            id: unwrapped.id,
+            sender: unwrapped.pubkey,
+            senderNpub: nip19.npubEncode(unwrapped.pubkey),
+            content: unwrapped.content.trim(),
+            timestamp: unwrapped.created_at,
+            event: unwrapped,
+            wrappedEventId: event.id,
+            nip: 17,
+          };
+
+          // Call the callback
+          await onMessage(messageData);
+        } catch (error) {
+          console.error("Error handling NIP-17 message event:", error);
+        }
+      },
+      oneose: () => {
+        console.log("NIP-17 subscription established to relays");
+      },
+      onclose: (reason) => {
+        console.warn("NIP-17 subscription closed:", reason);
+      },
+    });
+
+    // Return unsubscribe function
+    return () => {
+      if (sub && sub.close) {
+        sub.close();
+      }
+    };
+  }
+
+  /**
    * Get global feed from Nostr relays
    * @param {Object} options - Options for feed filtering
    * @returns {Promise<Array>} - Array of events
@@ -721,6 +877,23 @@ export async function sendmessage(recipientPubkey, message, options = {}) {
     console.log("Generated new keys:", keys);
   }
   return await client.sendmessage(recipientPubkey, message, options.relays);
+}
+
+export async function sendMessageNIP17(recipientPubkey, message, options = {}) {
+  const client = new NostrSDK(options);
+  if (!client.privateKey) {
+    const keys = client.generateNewKey();
+    console.log("Generated new keys:", keys);
+  }
+  return await client.sendMessageNIP17(recipientPubkey, message, options.relays);
+}
+
+export function getMessageNIP17(onMessage, options = {}) {
+  const client = new NostrSDK(options);
+  if (!client.privateKey) {
+    throw new Error("Private key required for receiving NIP-17 messages. Set via options.privateKey, options.nsec, or environment variables.");
+  }
+  return client.getMessageNIP17(onMessage, options);
 }
 
 export async function replyToPost(eventId, message, authorPubkey, options = {}) {
