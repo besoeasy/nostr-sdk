@@ -90,6 +90,38 @@ async function calculatePow(event, difficulty) {
 }
 
 /**
+ * Wrap a publish promise with a timeout so it cannot hang indefinitely
+ * @param {Promise<any>} promise - Publish promise
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @returns {Promise<{status: string, reason?: any}>}
+ */
+function wrapPublishPromise(promise, timeoutMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve({ status: "timeout", reason: `Timed out after ${timeoutMs}ms` });
+    }, timeoutMs);
+
+    promise.then(
+      () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ status: "fulfilled" });
+      },
+      (error) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ status: "rejected", reason: error });
+      }
+    );
+  });
+}
+
+/**
  * NostrSDK Client
  */
 class NostrSDK {
@@ -184,11 +216,12 @@ class NostrSDK {
    * Post a public note to Nostr
    * @param {string} message - The message to post
    * @param {Array} tags - Optional tags array
-   * @param {Array} relays - Optional relay list (uses default if not provided)
-   * @param {number} powDifficulty - POW difficulty level (default: 4)
+  * @param {Array} relays - Optional relay list (uses default if not provided)
+  * @param {number} powDifficulty - POW difficulty level (default: 4)
+  * @param {number} publishTimeoutMs - Relay publish timeout in ms (default: 5000)
    * @returns {Promise<Object>} - Result object with success status and event ID
    */
-  async posttoNostr(message, tags = [], relays = null, powDifficulty = 4) {
+  async posttoNostr(message, tags = [], relays = null, powDifficulty = 4, publishTimeoutMs = 5000) {
     if (!this.privateKey) {
       throw new Error("Private key not set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
     }
@@ -256,7 +289,9 @@ class NostrSDK {
 
       // Publish to relays
       const publishPromises = this.pool.publish(targetRelays, signedEvent);
-      const results = await Promise.allSettled(publishPromises);
+      const results = await Promise.all(
+        publishPromises.map((promise) => wrapPublishPromise(promise, publishTimeoutMs))
+      );
 
       let successful = 0;
       let failed = 0;
@@ -291,11 +326,12 @@ class NostrSDK {
    * @param {string} message - The reply message
    * @param {string} authorPubkey - The public key of the original post author (hex or npub format)
    * @param {Array} tags - Optional additional tags
-   * @param {Array} relays - Optional relay list (uses default if not provided)
-   * @param {number} powDifficulty - POW difficulty level (default: 4)
+  * @param {Array} relays - Optional relay list (uses default if not provided)
+  * @param {number} powDifficulty - POW difficulty level (default: 4)
+  * @param {number} publishTimeoutMs - Relay publish timeout in ms (default: 5000)
    * @returns {Promise<Object>} - Result object with success status and event ID
    */
-  async replyToPost(eventId, message, authorPubkey, tags = [], relays = null, powDifficulty = 4) {
+  async replyToPost(eventId, message, authorPubkey, tags = [], relays = null, powDifficulty = 4, publishTimeoutMs = 5000) {
     if (!this.privateKey) {
       throw new Error("Private key not set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
     }
@@ -395,7 +431,9 @@ class NostrSDK {
 
       // Publish to relays
       const publishPromises = this.pool.publish(targetRelays, signedEvent);
-      const results = await Promise.allSettled(publishPromises);
+      const results = await Promise.all(
+        publishPromises.map((promise) => wrapPublishPromise(promise, publishTimeoutMs))
+      );
 
       let successful = 0;
       let failed = 0;
@@ -517,10 +555,11 @@ class NostrSDK {
    * Send an encrypted direct message to a specific user
    * @param {string} recipientPubkey - Public key of the recipient (hex format)
    * @param {string} message - Message to send
-   * @param {Array} relays - Optional relay list (uses default if not provided)
+  * @param {Array} relays - Optional relay list (uses default if not provided)
+  * @param {number} publishTimeoutMs - Relay publish timeout in ms (default: 5000)
    * @returns {Promise<Object>} - Result object with success status
    */
-  async sendmessage(recipientPubkey, message, relays = null) {
+  async sendmessage(recipientPubkey, message, relays = null, publishTimeoutMs = 5000) {
     if (!this.privateKey) {
       throw new Error("Private key not set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
     }
@@ -556,7 +595,9 @@ class NostrSDK {
 
       // Publish to relays
       const publishPromises = this.pool.publish(targetRelays, signedEvent);
-      const results = await Promise.allSettled(publishPromises);
+      const results = await Promise.all(
+        publishPromises.map((promise) => wrapPublishPromise(promise, publishTimeoutMs))
+      );
 
       let successful = 0;
       let failed = 0;
@@ -589,10 +630,11 @@ class NostrSDK {
    * NIP-17 provides better privacy with sealed sender and ephemeral keys
    * @param {string} recipientPubkey - Public key of the recipient (hex format)
    * @param {string} message - Message to send
-   * @param {Array} relays - Optional relay list (uses default if not provided)
+  * @param {Array} relays - Optional relay list (uses default if not provided)
+  * @param {number} publishTimeoutMs - Relay publish timeout in ms (default: 5000)
    * @returns {Promise<Object>} - Result object with success status
    */
-  async sendMessageNIP17(recipientPubkey, message, relays = null) {
+  async sendMessageNIP17(recipientPubkey, message, relays = null, publishTimeoutMs = 5000) {
     if (!this.privateKey) {
       throw new Error("Private key not set. Use setPrivateKey, setPrivateKeyFromNsec, or generateNewKey first.");
     }
@@ -624,7 +666,9 @@ class NostrSDK {
 
       // Publish to relays
       const publishPromises = this.pool.publish(targetRelays, giftWrappedEvent);
-      const results = await Promise.allSettled(publishPromises);
+      const results = await Promise.all(
+        publishPromises.map((promise) => wrapPublishPromise(promise, publishTimeoutMs))
+      );
 
       let successful = 0;
       let failed = 0;
@@ -859,7 +903,13 @@ export async function posttoNostr(message, options = {}) {
     const keys = client.generateNewKey();
     console.log("Generated new keys:", keys);
   }
-  return await client.posttoNostr(message, options.tags, options.relays, options.powDifficulty);
+  return await client.posttoNostr(
+    message,
+    options.tags,
+    options.relays,
+    options.powDifficulty,
+    options.publishTimeoutMs
+  );
 }
 
 export function getmessage(onMessage, options = {}) {
@@ -876,7 +926,7 @@ export async function sendmessage(recipientPubkey, message, options = {}) {
     const keys = client.generateNewKey();
     console.log("Generated new keys:", keys);
   }
-  return await client.sendmessage(recipientPubkey, message, options.relays);
+  return await client.sendmessage(recipientPubkey, message, options.relays, options.publishTimeoutMs);
 }
 
 export async function sendMessageNIP17(recipientPubkey, message, options = {}) {
@@ -885,7 +935,7 @@ export async function sendMessageNIP17(recipientPubkey, message, options = {}) {
     const keys = client.generateNewKey();
     console.log("Generated new keys:", keys);
   }
-  return await client.sendMessageNIP17(recipientPubkey, message, options.relays);
+  return await client.sendMessageNIP17(recipientPubkey, message, options.relays, options.publishTimeoutMs);
 }
 
 export function getMessageNIP17(onMessage, options = {}) {
@@ -902,7 +952,15 @@ export async function replyToPost(eventId, message, authorPubkey, options = {}) 
     const keys = client.generateNewKey();
     console.log("Generated new keys:", keys);
   }
-  return await client.replyToPost(eventId, message, authorPubkey, options.tags, options.relays, options.powDifficulty);
+  return await client.replyToPost(
+    eventId,
+    message,
+    authorPubkey,
+    options.tags,
+    options.relays,
+    options.powDifficulty,
+    options.publishTimeoutMs
+  );
 }
 
 export async function getGlobalFeed(options = {}) {
